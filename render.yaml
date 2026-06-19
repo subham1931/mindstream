@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: mindstream-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false
