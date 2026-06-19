@@ -7,6 +7,23 @@
   width: 100%;
 }
 
+.temp-chat-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(155, 138, 255, 0.08);
+  border-bottom: 1px solid rgba(155, 138, 255, 0.2);
+  color: #c4b5fd;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.temp-chat-banner svg {
+  flex-shrink: 0;
+}
+
 .mobile-header {
   display: none;
 }

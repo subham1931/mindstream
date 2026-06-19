@@ -32,8 +32,9 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [models, setModels] = useState(DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id);
+  const [tempChat, setTempChat] = useState(null);
 
-  const activeConversation = conversations.find((c) => c.id === activeId);
+  const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const selectedModelLabel =
     models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
 
@@ -79,11 +80,19 @@ export default function App() {
     setConversations((prev) => [newChat, ...prev]);
     setActiveId(newChat.id);
     setSelectedModel(DEFAULT_MODELS[0].id);
+    setTempChat(null);
     setSidebarOpen(false);
   };
 
   const handleSelectChat = (id) => {
     setActiveId(id);
+    setTempChat(null);
+    setSidebarOpen(false);
+  };
+
+  const handleTempChat = () => {
+    setTempChat({ id: createId(), title: 'Temporary chat', messages: [], isTemp: true });
+    setSelectedModel(DEFAULT_MODELS[0].id);
     setSidebarOpen(false);
   };
 
@@ -110,15 +119,35 @@ export default function App() {
       .filter((m) => m.content?.trim())
       .map(({ role, content: text }) => ({ role, content: text.trim() }));
 
-    updateConversation(activeId, (c) => ({
-      title:
-        c.messages.length === 0
-          ? content.trim().slice(0, 40) + (content.length > 40 ? '…' : '')
-          : c.title,
-      messages: [...c.messages, userMessage, { role: 'assistant', content: '' }],
-    }));
+    const isTemp = Boolean(tempChat);
+
+    if (isTemp) {
+      setTempChat((prev) => ({
+        ...prev,
+        messages: [...prev.messages, userMessage, { role: 'assistant', content: '' }],
+      }));
+    } else {
+      updateConversation(activeId, (c) => ({
+        title:
+          c.messages.length === 0
+            ? content.trim().slice(0, 40) + (content.length > 40 ? '…' : '')
+            : c.title,
+        messages: [...c.messages, userMessage, { role: 'assistant', content: '' }],
+      }));
+    }
 
     setIsLoading(true);
+
+    const updateActiveMessages = (updater) => {
+      if (isTemp) {
+        setTempChat((prev) => {
+          const result = updater(prev);
+          return { ...prev, ...result };
+        });
+      } else {
+        updateConversation(activeId, updater);
+      }
+    };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -163,7 +192,7 @@ export default function App() {
             if (parsed.error) throw new Error(parsed.error);
 
             if (parsed.info) {
-              updateConversation(activeId, (c) => {
+              updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 msgs[msgs.length - 1] = {
                   ...msgs[msgs.length - 1],
@@ -183,7 +212,7 @@ export default function App() {
                     : label.includes('Pro')
                       ? 'Pro is generating…'
                       : 'Generating response…';
-              updateConversation(activeId, (c) => {
+              updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
                 msgs[msgs.length - 1] = {
@@ -204,7 +233,7 @@ export default function App() {
             }
 
             if (parsed.reasoning || parsed.content) {
-              updateConversation(activeId, (c) => {
+              updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
                 msgs[msgs.length - 1] = {
@@ -220,7 +249,7 @@ export default function App() {
             }
 
             if (parsed.meta?.modelLabel) {
-              updateConversation(activeId, (c) => {
+              updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
                 msgs[msgs.length - 1] = {
@@ -240,7 +269,7 @@ export default function App() {
         error.name === 'AbortError'
           ? 'Request timed out. Pro model can be slow — try again or use Flash.'
           : error.message;
-      updateConversation(activeId, (c) => {
+      updateActiveMessages((c) => {
         const msgs = [...c.messages];
         msgs[msgs.length - 1] = {
           role: 'assistant',
@@ -270,9 +299,11 @@ export default function App() {
         isOpen={sidebarOpen}
         onSelect={handleSelectChat}
         onNewChat={handleNewChat}
+        onTempChat={handleTempChat}
         onDelete={handleDeleteChat}
         onClose={() => setSidebarOpen(false)}
         activeModelLabel={selectedModelLabel}
+        isTempActive={Boolean(tempChat)}
       />
       <ChatArea
         conversation={activeConversation}
@@ -283,6 +314,7 @@ export default function App() {
         models={models}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
+        isTempChat={Boolean(tempChat)}
       />
     </div>
   );

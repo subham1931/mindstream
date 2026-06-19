@@ -8,6 +8,20 @@ function PlusIcon() {
   );
 }
 
+function IncognitoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 4C9 4 6.5 5.5 5 8h14c-1.5-2.5-4-4-7-4zM3 10h18M5 12c0 2.5 1.5 4.5 3.5 5.5M19 12c0 2.5-1.5 4.5-3.5 5.5M8.5 17.5a2.5 2.5 0 1 0 0 .01M15.5 17.5a2.5 2.5 0 1 0 0 .01"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function LightningIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -30,7 +44,7 @@ function ChatIcon() {
   );
 }
 
-export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onDelete, onClose, activeModelLabel }) {
+export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onClose, activeModelLabel, isTempActive }) {
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-panel">
@@ -42,10 +56,16 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
               ×
             </button>
           </div>
-          <button className="new-chat-btn" onClick={onNewChat}>
-            <PlusIcon />
-            <span>New chat</span>
-          </button>
+          <div className="sidebar-actions">
+            <button className="new-chat-btn" onClick={onNewChat}>
+              <PlusIcon />
+              <span>New chat</span>
+            </button>
+            <button className={`temp-chat-btn ${isTempActive ? 'active' : ''}`} onClick={onTempChat} title="Temporary chat — not saved to history">
+              <IncognitoIcon />
+              <span>Temp chat</span>
+            </button>
+          </div>
         </div>
 
         <div className="sidebar-section">
