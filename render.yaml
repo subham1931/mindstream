@@ -13,6 +13,8 @@ services:
         sync: false
       - key: NVIDIA_KEY_KIMI
         sync: false
+      - key: NVIDIA_KEY_QWEN
+        sync: false
       - key: NVIDIA_API_KEYS
         sync: false
       - key: CLIENT_URL

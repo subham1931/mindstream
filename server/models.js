@@ -39,6 +39,16 @@ export const MODEL_PROFILES = [
     timeoutMs: 90000,
   },
   {
+    id: 'qwen/qwen3.5-122b-a10b',
+    label: 'Qwen 3.5 122B',
+    keyEnv: 'NVIDIA_KEY_QWEN',
+    temperature: 0.6,
+    top_p: 0.95,
+    max_tokens: 16384,
+    hasReasoning: false,
+    timeoutMs: 90000,
+  },
+  {
     id: 'deepseek-ai/deepseek-v4-flash',
     label: 'DeepSeek V4 Flash',
     keyEnv: 'NVIDIA_KEY_DEEPSEEK',
@@ -71,6 +81,7 @@ export function loadModelRoutes() {
   const flashKey = process.env.NVIDIA_KEY_DEEPSEEK?.trim();
   const proKey = process.env.NVIDIA_KEY_DEEPSEEK_PRO?.trim();
   const kimiKey = process.env.NVIDIA_KEY_KIMI?.trim();
+  const qwenKey = process.env.NVIDIA_KEY_QWEN?.trim();
 
   return MODEL_PROFILES.map((profile, index) => {
     let apiKey = process.env[profile.keyEnv]?.trim();
@@ -78,6 +89,8 @@ export function loadModelRoutes() {
     if (!apiKey) {
       if (profile.id.includes('kimi')) {
         apiKey = kimiKey || genericKeys[0];
+      } else if (profile.id.includes('qwen')) {
+        apiKey = qwenKey || genericKeys[0];
       } else if (profile.id.includes('flash')) {
         apiKey = flashKey || genericKeys[0];
       } else if (profile.id.includes('pro')) {

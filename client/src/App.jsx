@@ -17,6 +17,7 @@ function createId() {
 const DEFAULT_MODELS = [
   { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
   { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
+  { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen 3.5 122B' },
   { id: 'deepseek-ai/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
   { id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
 ];
