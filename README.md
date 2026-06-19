@@ -26,7 +26,9 @@ Open http://localhost:5173
 1. Push this repo to GitHub
 2. Render → **New** → **Blueprint** → connect [subham1931/mindstream](https://github.com/subham1931/mindstream)
 3. Set environment variables:
-   - `NVIDIA_API_KEY` — your NVIDIA API key
+   - `NVIDIA_API_KEYS` — comma-separated NVIDIA keys (auto-rotates when one hits rate limit)
+   - `NVIDIA_API_KEY` — single key (alternative to `NVIDIA_API_KEYS`)
+   - `NVIDIA_FALLBACK_MODELS` — optional comma-separated backup models
    - `CLIENT_URL` — optional; Vercel `*.vercel.app` URLs are allowed automatically
 4. Deploy. Copy the backend URL (e.g. `https://mindstream-api.onrender.com`)
 

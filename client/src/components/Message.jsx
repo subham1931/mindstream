@@ -63,6 +63,12 @@ export default function Message({ message, isStreaming }) {
           </button>
         )}
 
+        {message.fallbackNotice && (
+          <div className="fallback-notice" role="status">
+            {message.fallbackNotice}
+          </div>
+        )}
+
         {isUser ? (
           <p>{message.content}</p>
         ) : (

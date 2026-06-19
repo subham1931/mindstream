@@ -117,11 +117,29 @@ export default function App() {
           try {
             const parsed = JSON.parse(data);
             if (parsed.error) throw new Error(parsed.error);
+
+            if (parsed.info) {
+              updateConversation(activeId, (c) => {
+                const msgs = [...c.messages];
+                msgs[msgs.length - 1] = {
+                  role: 'assistant',
+                  content: msgs[msgs.length - 1].content || '',
+                  fallbackNotice: parsed.info,
+                };
+                return { messages: msgs };
+              });
+            }
+
             if (parsed.content) {
               accumulated += parsed.content;
               updateConversation(activeId, (c) => {
                 const msgs = [...c.messages];
-                msgs[msgs.length - 1] = { role: 'assistant', content: accumulated };
+                const prev = msgs[msgs.length - 1];
+                msgs[msgs.length - 1] = {
+                  role: 'assistant',
+                  content: accumulated,
+                  fallbackNotice: prev.fallbackNotice,
+                };
                 return { messages: msgs };
               });
             }
