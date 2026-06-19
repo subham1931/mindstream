@@ -312,6 +312,43 @@
   color: #e88;
 }
 
+.auth-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.sidebar-auth-btn {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sidebar-auth-btn.signin {
+  background: var(--surface-btn);
+  border: 1px solid var(--surface-btn-border);
+  color: var(--text-secondary);
+}
+
+.sidebar-auth-btn.signin:hover {
+  background: var(--surface-btn-hover);
+  border-color: var(--surface-border-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-auth-btn.signup {
+  background: linear-gradient(135deg, #e8a04a, #c47a3a);
+  border: none;
+  color: #fff;
+}
+
+.sidebar-auth-btn.signup:hover {
+  opacity: 0.9;
+}
+
 .model-badge {
   display: flex;
   align-items: center;

@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -8,7 +10,9 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 export const supabase = supabaseUrl && supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey)
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      realtime: { transport: ws },
+    })
   : null;
 
 export async function verifyToken(authHeader) {

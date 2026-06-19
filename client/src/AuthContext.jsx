@@ -26,29 +26,42 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signUp = async (email, password) => {
+    if (!supabase) throw new Error('Auth not configured');
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
     return data;
   };
 
   const signIn = async (email, password) => {
+    if (!supabase) throw new Error('Auth not configured');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   };
 
   const signOut = async () => {
+    if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
+  const signInWithOAuth = async (provider) => {
+    if (!supabase) throw new Error('Auth not configured');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) throw error;
+  };
+
   const getAccessToken = async () => {
+    if (!supabase) return null;
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token || null;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, getAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, signInWithOAuth, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

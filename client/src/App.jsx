@@ -26,7 +26,7 @@ const DEFAULT_MODELS = [
   { id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
 ];
 
-const FREE_MESSAGE_LIMIT = 1;
+const FREE_MESSAGE_LIMIT = 0;
 
 export default function App() {
   const { user, loading: authLoading, getAccessToken, signOut } = useAuth();
@@ -42,6 +42,7 @@ export default function App() {
   const [tempChat, setTempChat] = useState(null);
   const [guestMessageCount, setGuestMessageCount] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('signin');
 
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const selectedModelLabel =
@@ -90,8 +91,9 @@ export default function App() {
             dbId: c.id,
             loaded: false,
           }));
-          setConversations(loaded);
-          setActiveId(loaded[0].id);
+          const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
+          setConversations([newChat, ...loaded]);
+          setActiveId(newChat.id);
         }
       })
       .catch(() => {});
@@ -237,10 +239,15 @@ export default function App() {
   const handleSend = async (content) => {
     if (!content.trim() || isLoading || !activeConversation) return;
 
-    // Check if guest has exceeded free limit
+    // Check if guest has exceeded free limit (require auth to chat)
     if (!user && supabase && guestMessageCount >= FREE_MESSAGE_LIMIT) {
       setShowAuthModal(true);
       return;
+    }
+
+    // If supabase is not configured, allow unlimited guest usage
+    if (!user && !supabase) {
+      // no restriction
     }
 
     const userMessage = { role: 'user', content: content.trim() };
@@ -450,7 +457,7 @@ export default function App() {
   return (
     <div className="app">
       {showAuthModal && (
-        <AuthModal onClose={() => setShowAuthModal(false)} />
+        <AuthModal onClose={() => setShowAuthModal(false)} defaultMode={authModalMode} />
       )}
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
@@ -467,7 +474,14 @@ export default function App() {
         activeModelLabel={selectedModelLabel}
         isTempActive={Boolean(tempChat)}
         user={user}
-        onSignOut={signOut}
+        onSignOut={() => {
+          signOut();
+          const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
+          setConversations([newChat]);
+          setActiveId(newChat.id);
+          setTempChat(null);
+        }}
+        onShowAuth={(mode) => { setAuthModalMode(mode); setShowAuthModal(true); }}
       />
       <ChatArea
         conversation={activeConversation}

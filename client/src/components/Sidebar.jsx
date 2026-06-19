@@ -44,7 +44,7 @@ function ChatIcon() {
   );
 }
 
-export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onClose, activeModelLabel, isTempActive, user, onSignOut }) {
+export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onClose, activeModelLabel, isTempActive, user, onSignOut, onShowAuth }) {
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-panel">
@@ -98,7 +98,7 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
         </div>
 
         <div className="sidebar-footer">
-          {user && (
+          {user ? (
             <div className="user-section">
               <div className="user-avatar">{user.email?.[0]?.toUpperCase() || 'U'}</div>
               <span className="user-email">{user.email}</span>
@@ -106,6 +106,15 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
+              </button>
+            </div>
+          ) : (
+            <div className="auth-buttons">
+              <button className="sidebar-auth-btn signin" onClick={() => onShowAuth('signin')}>
+                Sign In
+              </button>
+              <button className="sidebar-auth-btn signup" onClick={() => onShowAuth('signup')}>
+                Sign Up
               </button>
             </div>
           )}
