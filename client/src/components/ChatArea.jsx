@@ -5,7 +5,7 @@ import './ChatArea.css';
 
 const SCROLL_THRESHOLD = 100;
 
-export default function ChatArea({ conversation, isLoading, onSend, onToggleSidebar, onNewChat }) {
+export default function ChatArea({ conversation, isLoading, onSend, onToggleSidebar, onNewChat, models, selectedModel, onModelChange }) {
   const scrollRef = useRef(null);
   const isPinnedRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -114,7 +114,14 @@ export default function ChatArea({ conversation, isLoading, onSend, onToggleSide
       </div>
 
       <div className="chat-input-slot">
-        <ChatInput onSend={handleSend} isLoading={isLoading} showGreeting={isEmpty} />
+        <ChatInput
+          onSend={handleSend}
+          isLoading={isLoading}
+          showGreeting={isEmpty}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={onModelChange}
+        />
       </div>
     </main>
   );

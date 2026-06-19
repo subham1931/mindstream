@@ -5,8 +5,21 @@ import { apiUrl } from './api';
 import './App.css';
 
 function createId() {
-  return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
+
+const DEFAULT_MODELS = [
+  { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
+  { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
+  { id: 'deepseek-ai/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+  { id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+];
 
 export default function App() {
   const [conversations, setConversations] = useState([
@@ -15,8 +28,27 @@ export default function App() {
   const [activeId, setActiveId] = useState(conversations[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [models, setModels] = useState(DEFAULT_MODELS);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id);
 
   const activeConversation = conversations.find((c) => c.id === activeId);
+  const selectedModelLabel =
+    models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
+
+  useEffect(() => {
+    fetch(apiUrl('/api/models'))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.models?.length) {
+          const available = data.models.filter((m) => m.available);
+          if (available.length) {
+            setModels(available);
+            setSelectedModel(data.defaultModel || available[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? 'hidden' : '';
@@ -44,6 +76,7 @@ export default function App() {
     const newChat = { id: createId(), title: 'New conversation', messages: [] };
     setConversations((prev) => [newChat, ...prev]);
     setActiveId(newChat.id);
+    setSelectedModel(DEFAULT_MODELS[0].id);
     setSidebarOpen(false);
   };
 
@@ -71,7 +104,9 @@ export default function App() {
     if (!content.trim() || isLoading || !activeConversation) return;
 
     const userMessage = { role: 'user', content: content.trim() };
-    const apiMessages = [...activeConversation.messages, userMessage];
+    const apiMessages = [...activeConversation.messages, userMessage]
+      .filter((m) => m.content?.trim())
+      .map(({ role, content: text }) => ({ role, content: text.trim() }));
 
     updateConversation(activeId, (c) => ({
       title:
@@ -83,14 +118,19 @@ export default function App() {
 
     setIsLoading(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
     try {
       const response = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: apiMessages,
+          model: selectedModel,
           stream: true,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -101,6 +141,8 @@ export default function App() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
+      let reasoningAccum = '';
+      let statusHint = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -122,23 +164,66 @@ export default function App() {
               updateConversation(activeId, (c) => {
                 const msgs = [...c.messages];
                 msgs[msgs.length - 1] = {
-                  role: 'assistant',
-                  content: msgs[msgs.length - 1].content || '',
+                  ...msgs[msgs.length - 1],
                   fallbackNotice: parsed.info,
                 };
                 return { messages: msgs };
               });
             }
 
+            if (parsed.status) {
+              const label = parsed.modelLabel || '';
+              statusHint =
+                parsed.status === 'connecting' && label.includes('Pro')
+                  ? 'Connecting to Pro — this model can take up to a minute…'
+                  : parsed.status === 'connecting'
+                    ? 'Connecting…'
+                    : label.includes('Pro')
+                      ? 'Pro is generating…'
+                      : 'Generating response…';
+              updateConversation(activeId, (c) => {
+                const msgs = [...c.messages];
+                const prev = msgs[msgs.length - 1];
+                msgs[msgs.length - 1] = {
+                  ...prev,
+                  statusHint,
+                  modelLabel: parsed.modelLabel || prev.modelLabel,
+                };
+                return { messages: msgs };
+              });
+            }
+
+            if (parsed.reasoning) {
+              reasoningAccum += parsed.reasoning;
+            }
+
             if (parsed.content) {
               accumulated += parsed.content;
+            }
+
+            if (parsed.reasoning || parsed.content) {
               updateConversation(activeId, (c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
                 msgs[msgs.length - 1] = {
                   role: 'assistant',
                   content: accumulated,
+                  reasoning: reasoningAccum || undefined,
                   fallbackNotice: prev.fallbackNotice,
+                  modelLabel: parsed.meta?.modelLabel || prev.modelLabel,
+                  statusHint: accumulated || reasoningAccum ? undefined : prev.statusHint,
+                };
+                return { messages: msgs };
+              });
+            }
+
+            if (parsed.meta?.modelLabel) {
+              updateConversation(activeId, (c) => {
+                const msgs = [...c.messages];
+                const prev = msgs[msgs.length - 1];
+                msgs[msgs.length - 1] = {
+                  ...prev,
+                  modelLabel: parsed.meta.modelLabel,
                 };
                 return { messages: msgs };
               });
@@ -149,16 +234,21 @@ export default function App() {
         }
       }
     } catch (error) {
+      const message =
+        error.name === 'AbortError'
+          ? 'Request timed out. Pro model can be slow — try again or use Flash.'
+          : error.message;
       updateConversation(activeId, (c) => {
         const msgs = [...c.messages];
         msgs[msgs.length - 1] = {
           role: 'assistant',
-          content: `Error: ${error.message}`,
+          content: `Error: ${message}`,
           isError: true,
         };
         return { messages: msgs };
       });
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };
@@ -180,6 +270,7 @@ export default function App() {
         onNewChat={handleNewChat}
         onDelete={handleDeleteChat}
         onClose={() => setSidebarOpen(false)}
+        activeModelLabel={selectedModelLabel}
       />
       <ChatArea
         conversation={activeConversation}
@@ -187,6 +278,9 @@ export default function App() {
         onSend={handleSend}
         onToggleSidebar={() => setSidebarOpen(true)}
         onNewChat={handleNewChat}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
       />
     </div>
   );

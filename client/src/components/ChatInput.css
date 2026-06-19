@@ -4,6 +4,8 @@
   margin: 0 auto;
   width: 100%;
   min-width: 0;
+  position: relative;
+  z-index: 5;
 }
 
 .input-greeting {
@@ -40,6 +42,7 @@
   padding: 16px 16px 12px;
   transition: border-color 0.2s;
   min-height: 120px;
+  overflow: visible;
 }
 
 .chat-input-container:focus-within {
@@ -89,7 +92,8 @@
 
 .toolbar-left {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
 }
 
 .toolbar-icon-btn {
@@ -111,6 +115,16 @@
   border-color: var(--surface-border-hover);
 }
 
+.model-selector-wrap {
+  position: relative;
+  z-index: 30;
+}
+
+.model-selector.open {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
 .model-selector {
   display: flex;
   align-items: center;
@@ -126,9 +140,48 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.model-selector:hover {
+.model-selector:hover:not(:disabled) {
   background: var(--surface-btn-hover);
   border-color: var(--surface-border-hover);
+}
+
+.model-selector:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.model-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.model-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+
+.model-menu-item:hover {
+  background: var(--surface-btn-hover);
+  color: var(--text-primary);
+}
+
+.model-menu-item.active {
+  background: var(--surface-btn);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .model-icon {

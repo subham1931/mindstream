@@ -107,13 +107,15 @@ const VOICE_ERRORS = {
   'aborted': '',
 };
 
-export default function ChatInput({ onSend, isLoading, showGreeting }) {
+export default function ChatInput({ onSend, isLoading, showGreeting, models = [], selectedModel, onModelChange }) {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const textareaRef = useRef(null);
   const recognitionRef = useRef(null);
   const voiceBaseRef = useRef('');
+  const modelWrapRef = useRef(null);
 
   const speechSupported = Boolean(SpeechRecognition);
 
@@ -128,6 +130,24 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
   useEffect(() => {
     return () => recognitionRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+
+    const close = (e) => {
+      if (modelWrapRef.current?.contains(e.target)) return;
+      setModelMenuOpen(false);
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', close);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', close);
+    };
+  }, [modelMenuOpen]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
@@ -235,6 +255,9 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
 
   const actionDisabled = isLoading || (!hasText && !isListening && !speechSupported);
 
+  const selectedLabel =
+    models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
+
   return (
     <div className="chat-input-wrapper">
       {showGreeting && (
@@ -277,13 +300,46 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
             <button type="button" className="toolbar-icon-btn toolbar-extra" title="Add link" aria-label="Add link">
               <LinkIcon />
             </button>
-            <button type="button" className="model-selector" title="Select model" aria-label="Select model">
-              <span className="model-icon">
-                <LightningIcon />
-              </span>
-              <span className="model-label">DeepSeek V4</span>
-              <ChevronDownIcon />
-            </button>
+            <div className="model-selector-wrap" ref={modelWrapRef}>
+              <button
+                type="button"
+                className={`model-selector ${modelMenuOpen ? 'open' : ''}`}
+                title="Select model"
+                aria-label="Select model"
+                aria-expanded={modelMenuOpen}
+                aria-haspopup="menu"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setModelMenuOpen((open) => !open);
+                }}
+                disabled={isLoading}
+              >
+                <span className="model-icon">
+                  <LightningIcon />
+                </span>
+                <span className="model-label">{selectedLabel}</span>
+                <ChevronDownIcon />
+              </button>
+              {modelMenuOpen && (
+                <div className="model-menu" role="menu">
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      role="menuitem"
+                      className={`model-menu-item ${model.id === selectedModel ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onModelChange?.(model.id);
+                        setModelMenuOpen(false);
+                      }}
+                    >
+                      {model.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="toolbar-right">

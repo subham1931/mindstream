@@ -2,11 +2,20 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
+import {
+  MODEL_PROFILES,
+  loadModelRoutes,
+  buildRequestBody,
+  extractReasoning,
+  prepareMessages,
+  getModelLabel,
+} from './models.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const MAX_TOKENS = Number(process.env.MAX_TOKENS) || 4096;
 const KEY_COOLDOWN_MS = Number(process.env.KEY_COOLDOWN_MS) || 60000;
+const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS) || 120000;
 const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
 function normalizeOrigin(url) {
@@ -44,23 +53,12 @@ app.use(
 );
 app.use(express.json());
 
-function loadApiKeys() {
-  const raw = process.env.NVIDIA_API_KEYS || process.env.NVIDIA_API_KEY || '';
-  return [...new Set(raw.split(',').map((k) => k.trim()).filter(Boolean))];
-}
-
-function loadModels() {
-  const primary = process.env.NVIDIA_MODEL || 'deepseek-ai/deepseek-v4-pro';
-  const fallbacks = (process.env.NVIDIA_FALLBACK_MODELS || '')
-    .split(',')
-    .map((m) => m.trim())
-    .filter(Boolean);
-  return [...new Set([primary, ...fallbacks])];
-}
-
-const apiKeys = loadApiKeys();
-const models = loadModels();
+const modelRoutes = loadModelRoutes();
 const keyCooldownUntil = new Map();
+
+function cooldownKey(key) {
+  return `${key.slice(0, 12)}…`;
+}
 
 function isKeyAvailable(key) {
   const until = keyCooldownUntil.get(key);
@@ -71,41 +69,47 @@ function markKeyLimited(key) {
   keyCooldownUntil.set(key, Date.now() + KEY_COOLDOWN_MS);
 }
 
-function createClient(apiKey) {
-  return new OpenAI({ apiKey, baseURL: NVIDIA_BASE_URL });
+function createClient(apiKey, timeoutMs = API_TIMEOUT_MS) {
+  return new OpenAI({
+    apiKey,
+    baseURL: NVIDIA_BASE_URL,
+    timeout: timeoutMs,
+  });
 }
 
-function buildRequestBody(messages, model, stream) {
-  const body = {
-    model,
-    messages,
-    temperature: 1,
-    top_p: 0.95,
-    max_tokens: MAX_TOKENS,
-    stream,
-  };
-
-  if (model.includes('deepseek')) {
-    body.chat_template_kwargs = { thinking: false };
-  }
-
-  return body;
+function isRetriableError(error) {
+  const status = error?.status;
+  return (
+    status === 429 ||
+    status === 403 ||
+    status === 408 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    error?.code === 'ECONNABORTED' ||
+    error?.name === 'TimeoutError' ||
+    /timed out/i.test(error?.message || '')
+  );
 }
 
-function buildFallbackNotice(modelIndex, keyIndex, model) {
+function orderRoutes(requestedModel) {
+  if (!requestedModel) return modelRoutes;
+
+  const preferred = modelRoutes.find((r) => r.id === requestedModel);
+  if (!preferred) return modelRoutes;
+
+  return [preferred, ...modelRoutes.filter((r) => r.id !== requestedModel)];
+}
+
+function buildFallbackNotice(routeIndex, route, requestedModel) {
+  if (routeIndex === 0 && route.id === requestedModel) return null;
+
   const parts = [];
-
-  if (keyIndex > 0) {
-    parts.push(`Backup API key in use (${keyIndex + 1}/${apiKeys.length})`);
+  if (routeIndex > 0 || route.id !== requestedModel) {
+    parts.push(`Switched to ${route.label}`);
   }
-
-  if (modelIndex > 0) {
-    parts.push(`Switched to alternate model: ${model}`);
-  }
-
-  if (!parts.length) return null;
-
-  return `${parts.join(' · ')}. Response may take a moment.`;
+  return parts.length ? `${parts.join(' · ')}. Response may take a moment.` : null;
 }
 
 function formatApiError(error) {
@@ -115,14 +119,14 @@ function formatApiError(error) {
     return {
       status: 429,
       message:
-        'All API keys and models are temporarily busy. Wait a minute and try again, or add more NVIDIA API keys on the server.',
+        'All models are temporarily busy. Wait a minute and try again.',
     };
   }
 
   if (status === 401 || status === 403) {
     return {
       status,
-      message: 'API key rejected. Verify your NVIDIA API keys on Render.',
+      message: 'API key rejected. Verify your NVIDIA API keys in server .env',
     };
   }
 
@@ -132,98 +136,157 @@ function formatApiError(error) {
   };
 }
 
-async function completeWithPool(messages, stream) {
-  if (!apiKeys.length) {
-    throw Object.assign(new Error('No NVIDIA API keys configured'), { status: 500 });
+async function completeWithPool(messages, stream, requestedModel) {
+  if (!modelRoutes.length) {
+    throw Object.assign(new Error('No model routes configured'), { status: 500 });
   }
 
+  const preparedMessages = prepareMessages(messages);
+  const routes = orderRoutes(requestedModel);
   let lastError;
 
-  for (let modelIndex = 0; modelIndex < models.length; modelIndex++) {
-    const model = models[modelIndex];
+  for (let i = 0; i < routes.length; i++) {
+    const route = routes[i];
+    const { apiKey } = route;
 
-    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex++) {
-      const key = apiKeys[keyIndex];
-      if (!isKeyAvailable(key)) continue;
+    if (!isKeyAvailable(apiKey)) continue;
 
-      const client = createClient(key);
+    const client = createClient(apiKey, route.timeoutMs || API_TIMEOUT_MS);
 
-      try {
-        const completion = await client.chat.completions.create(
-          buildRequestBody(messages, model, stream)
+    try {
+      const completion = await client.chat.completions.create(
+        buildRequestBody(route, preparedMessages, stream, MAX_TOKENS)
+      );
+
+      return {
+        completion,
+        meta: {
+          model: route.id,
+          modelLabel: route.label,
+          usedFallback: i > 0 || route.id !== requestedModel,
+          notice: buildFallbackNotice(i, route, requestedModel),
+          hasReasoning: route.hasReasoning,
+        },
+      };
+    } catch (error) {
+      if (isRetriableError(error)) {
+        if (error?.status === 429) markKeyLimited(apiKey);
+        lastError = error;
+        console.warn(
+          `${route.label} unavailable (${error?.status || error?.message}) — trying next model...`
         );
-
-        return {
-          completion,
-          meta: {
-            model,
-            keySlot: keyIndex + 1,
-            totalKeys: apiKeys.length,
-            usedFallback: modelIndex > 0 || keyIndex > 0,
-            notice: buildFallbackNotice(modelIndex, keyIndex, model),
-          },
-        };
-      } catch (error) {
-        if (error?.status === 429) {
-          markKeyLimited(key);
-          lastError = error;
-          console.warn(
-            `Rate limited: model=${model}, key=${keyIndex + 1}/${apiKeys.length} — trying next...`
-          );
-          continue;
-        }
-        throw error;
+        continue;
       }
+      throw error;
     }
   }
 
-  throw lastError || Object.assign(new Error('All keys rate limited'), { status: 429 });
+  throw lastError || Object.assign(new Error('All models rate limited'), { status: 429 });
 }
 
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    model: models[0],
-    fallbackModels: models.slice(1),
-    apiKeyCount: apiKeys.length,
+    models: modelRoutes.map((r) => ({ id: r.id, label: r.label })),
+    defaultModel: modelRoutes[0]?.id,
+  });
+});
+
+app.get('/api/models', (_req, res) => {
+  res.json({
+    models: MODEL_PROFILES.map((p) => ({
+      id: p.id,
+      label: p.label,
+      available: modelRoutes.some((r) => r.id === p.id),
+    })),
+    defaultModel: modelRoutes[0]?.id || MODEL_PROFILES[0]?.id,
   });
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { messages, stream = true } = req.body;
+  const { messages, stream = true, model: requestedModel } = req.body;
 
   if (!messages?.length) {
     return res.status(400).json({ error: 'Messages are required' });
   }
 
-  if (!apiKeys.length) {
-    return res.status(500).json({ error: 'NVIDIA API keys are not configured' });
+  if (!modelRoutes.length) {
+    return res.status(500).json({ error: 'No NVIDIA API keys configured for any model' });
   }
 
   try {
-    const { completion, meta } = await completeWithPool(messages, stream);
-
     if (stream) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
+      const requestedLabel = getModelLabel(requestedModel) || 'model';
+      res.write(
+        `data: ${JSON.stringify({
+          status: 'connecting',
+          modelLabel: requestedLabel,
+        })}\n\n`
+      );
+      res.flushHeaders?.();
+    }
+
+    const { completion, meta } = await completeWithPool(messages, stream, requestedModel);
+
+    if (stream) {
+      res.write(
+        `data: ${JSON.stringify({
+          meta: {
+            model: meta.model,
+            modelLabel: meta.modelLabel,
+          },
+          status: 'started',
+          modelLabel: meta.modelLabel,
+        })}\n\n`
+      );
+
       if (meta.notice) {
-        res.write(`data: ${JSON.stringify({ info: meta.notice, meta })}\n\n`);
+        res.write(`data: ${JSON.stringify({ info: meta.notice })}\n\n`);
       }
 
+      let receivedContent = false;
+      let receivedReasoning = false;
+
       for await (const chunk of completion) {
-        const content = chunk.choices[0]?.delta?.content;
+        const delta = chunk.choices[0]?.delta;
+        const content = delta?.content;
+        const reasoning =
+          delta?.reasoning_content ||
+          delta?.reasoning ||
+          (typeof delta === 'object' && delta?.reasoning);
+
+        if (reasoning) {
+          receivedReasoning = true;
+          res.write(`data: ${JSON.stringify({ reasoning })}\n\n`);
+        }
         if (content) {
+          receivedContent = true;
           res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+      }
+
+      if (!receivedContent && !receivedReasoning) {
+        res.write(
+          `data: ${JSON.stringify({ error: 'Model returned no content. Try again or switch models.' })}\n\n`
+        );
       }
 
       res.write('data: [DONE]\n\n');
       res.end();
     } else {
-      const content = completion.choices[0]?.message?.content || '';
-      res.json({ content, meta });
+      const message = completion.choices[0]?.message;
+      const reasoning = extractReasoning(message);
+      const content = message?.content || '';
+
+      res.json({
+        content,
+        reasoning,
+        meta,
+      });
     }
   } catch (error) {
     const { status, message } = formatApiError(error);
@@ -240,5 +303,7 @@ app.post('/api/chat', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`MindStream server running on port ${PORT}`);
-  console.log(`API keys loaded: ${apiKeys.length}, models: ${models.join(', ')}`);
+  console.log(
+    `Models: ${modelRoutes.map((r) => `${r.label} (${cooldownKey(r.apiKey)})`).join(', ') || 'none'}`
+  );
 });

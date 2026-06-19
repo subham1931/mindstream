@@ -69,11 +69,25 @@ export default function Message({ message, isStreaming }) {
           </div>
         )}
 
+        {!isUser && message.statusHint && !message.content && !message.reasoning && (
+          <p className="status-hint">{message.statusHint}</p>
+        )}
+
+        {!isUser && message.reasoning && (
+          <details className="reasoning-block" open={isStreaming}>
+            <summary>Reasoning</summary>
+            <ReactMarkdown>{message.reasoning}</ReactMarkdown>
+          </details>
+        )}
+
         {isUser ? (
           <p>{message.content}</p>
         ) : (
           <>
-            <ReactMarkdown>{message.content || (isStreaming ? '▍' : '')}</ReactMarkdown>
+            {isStreaming && !message.content && message.reasoning && (
+              <p className="thinking-hint">Thinking…</p>
+            )}
+            <ReactMarkdown>{message.content || (isStreaming && !message.reasoning ? '▍' : '')}</ReactMarkdown>
             {isStreaming && message.content && <span className="cursor-blink">▍</span>}
           </>
         )}

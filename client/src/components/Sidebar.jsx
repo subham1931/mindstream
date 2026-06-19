@@ -30,7 +30,7 @@ function ChatIcon() {
   );
 }
 
-export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onDelete, onClose }) {
+export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onDelete, onClose, activeModelLabel }) {
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-panel">
@@ -82,7 +82,7 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
             <span className="model-icon">
               <LightningIcon />
             </span>
-            <span>DeepSeek V4 Pro</span>
+            <span>{activeModelLabel || 'DeepSeek V4 Flash'}</span>
           </div>
         </div>
       </div>
