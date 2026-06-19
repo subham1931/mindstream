@@ -12,11 +12,50 @@
   display: none;
 }
 
+.chat-scroll-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 .chat-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.scroll-to-bottom {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.scroll-to-bottom:hover {
+  background: var(--surface-btn-hover);
+  color: var(--text-primary);
+  border-color: var(--surface-border-hover);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.scroll-to-bottom svg {
+  flex-shrink: 0;
 }
 
 .welcome--minimal {

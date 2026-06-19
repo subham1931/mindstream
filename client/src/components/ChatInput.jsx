@@ -1,5 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import './ChatInput.css';
+
+const SpeechRecognition =
+  typeof window !== 'undefined'
+    ? window.SpeechRecognition || window.webkitSpeechRecognition
+    : null;
 
 function BrainIcon() {
   return (
@@ -95,9 +100,22 @@ function SendIcon() {
   );
 }
 
+const VOICE_ERRORS = {
+  'not-allowed': 'Microphone access denied. Allow mic permission in browser settings.',
+  'no-speech': 'No speech detected. Try again.',
+  'network': 'Voice input needs an internet connection.',
+  'aborted': '',
+};
+
 export default function ChatInput({ onSend, isLoading, showGreeting }) {
   const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
   const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const voiceBaseRef = useRef('');
+
+  const speechSupported = Boolean(SpeechRecognition);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -107,10 +125,76 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
     }
   }, [input]);
 
+  useEffect(() => {
+    return () => recognitionRef.current?.abort();
+  }, []);
+
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setIsListening(false);
+  }, []);
+
+  const startListening = useCallback(() => {
+    if (!SpeechRecognition || isLoading) return;
+
+    stopListening();
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    voiceBaseRef.current = input;
+    let sessionFinal = '';
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          sessionFinal += text;
+        } else {
+          interim += text;
+        }
+      }
+
+      const base = voiceBaseRef.current;
+      const spoken = (sessionFinal + interim).trim();
+      const combined = base && spoken ? `${base} ${spoken}` : base || spoken;
+      setInput(combined);
+      setVoiceError('');
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'aborted') {
+        setVoiceError(VOICE_ERRORS[event.error] || 'Voice input failed. Try again.');
+      }
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      setVoiceError('');
+    } catch {
+      setVoiceError('Could not start voice input.');
+    }
+  }, [input, isLoading, stopListening]);
+
   const handleSubmit = () => {
     if (!input.trim() || isLoading) return;
+    stopListening();
     onSend(input);
     setInput('');
+    voiceBaseRef.current = '';
   };
 
   const handleKeyDown = (e) => {
@@ -120,7 +204,36 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
     }
   };
 
+  const handleInputChange = (e) => {
+    if (isListening) stopListening();
+    setInput(e.target.value);
+    setVoiceError('');
+  };
+
+  const handleActionClick = () => {
+    if (isLoading) return;
+    if (hasText) {
+      handleSubmit();
+    } else if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   const hasText = input.trim().length > 0;
+
+  const actionTitle = isLoading
+    ? 'Sending...'
+    : hasText
+      ? 'Send message'
+      : isListening
+        ? 'Stop listening'
+        : speechSupported
+          ? 'Start voice input'
+          : 'Voice not supported in this browser';
+
+  const actionDisabled = isLoading || (!hasText && !isListening && !speechSupported);
 
   return (
     <div className="chat-input-wrapper">
@@ -131,14 +244,27 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
         </div>
       )}
 
-      <div className="chat-input-container">
+      <div className={`chat-input-container ${isListening ? 'is-listening' : ''}`}>
+        {isListening && (
+          <div className="voice-status" role="status">
+            <span className="voice-pulse" />
+            Listening… tap mic to stop
+          </div>
+        )}
+
+        {voiceError && (
+          <div className="voice-error" role="alert">
+            {voiceError}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           className="chat-textarea"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Ask me anything..."
+          placeholder={isListening ? 'Speak now…' : 'Ask me anything...'}
           rows={1}
           disabled={isLoading}
         />
@@ -166,11 +292,12 @@ export default function ChatInput({ onSend, isLoading, showGreeting }) {
             </button>
             <button
               type="button"
-              className="action-btn"
-              onClick={handleSubmit}
-              disabled={!hasText || isLoading}
-              title={hasText ? 'Send message' : 'Voice input'}
-              aria-label={hasText ? 'Send message' : 'Voice input'}
+              className={`action-btn ${isListening ? 'listening' : ''}`}
+              onClick={handleActionClick}
+              disabled={actionDisabled}
+              title={actionTitle}
+              aria-label={actionTitle}
+              aria-pressed={isListening}
             >
               {isLoading ? (
                 <span className="spinner" />
