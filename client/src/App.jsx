@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
-import AuthPage from './components/AuthPage';
+import AuthModal from './components/AuthModal';
 import { useAuth } from './AuthContext';
 import { supabase } from './supabase';
 import { apiUrl } from './api';
@@ -26,6 +26,8 @@ const DEFAULT_MODELS = [
   { id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
 ];
 
+const FREE_MESSAGE_LIMIT = 1;
+
 export default function App() {
   const { user, loading: authLoading, getAccessToken, signOut } = useAuth();
 
@@ -38,6 +40,8 @@ export default function App() {
   const [models, setModels] = useState(DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id);
   const [tempChat, setTempChat] = useState(null);
+  const [guestMessageCount, setGuestMessageCount] = useState(0);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const selectedModelLabel =
@@ -70,6 +74,10 @@ export default function App() {
   // Load conversations from Supabase when user logs in
   useEffect(() => {
     if (!user || !supabase) return;
+
+    // Reset guest count when user signs in
+    setGuestMessageCount(0);
+    setShowAuthModal(false);
 
     authFetch(apiUrl('/api/conversations'))
       .then((res) => res.json())
@@ -139,7 +147,6 @@ export default function App() {
       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
       if (!conv.dbId) {
-        // Create new conversation in DB
         const res = await fetch(apiUrl('/api/conversations'), {
           method: 'POST',
           headers,
@@ -203,7 +210,6 @@ export default function App() {
   const handleDeleteChat = async (id) => {
     const conv = conversations.find((c) => c.id === id);
 
-    // Delete from DB if it exists there
     if (conv?.dbId && user) {
       try {
         const token = await getAccessToken();
@@ -211,7 +217,7 @@ export default function App() {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
-      } catch { /* continue with local delete */ }
+      } catch { /* continue */ }
     }
 
     setConversations((prev) => {
@@ -230,6 +236,12 @@ export default function App() {
 
   const handleSend = async (content) => {
     if (!content.trim() || isLoading || !activeConversation) return;
+
+    // Check if guest has exceeded free limit
+    if (!user && supabase && guestMessageCount >= FREE_MESSAGE_LIMIT) {
+      setShowAuthModal(true);
+      return;
+    }
 
     const userMessage = { role: 'user', content: content.trim() };
     const apiMessages = [...activeConversation.messages, userMessage]
@@ -379,6 +391,11 @@ export default function App() {
 
       finalContent = accumulated;
       finalReasoning = reasoningAccum;
+
+      // Increment guest message count after successful response
+      if (!user && supabase) {
+        setGuestMessageCount((prev) => prev + 1);
+      }
     } catch (error) {
       const message =
         error.name === 'AbortError'
@@ -405,7 +422,6 @@ export default function App() {
             modelLabel: finalModelLabel || undefined,
           });
 
-          // Update title in DB if it was just set
           if (activeConversation.messages.length === 0) {
             try {
               const token = await getAccessToken();
@@ -431,13 +447,11 @@ export default function App() {
     );
   }
 
-  // Show auth page if not logged in (and supabase is configured)
-  if (!user && supabase) {
-    return <AuthPage />;
-  }
-
   return (
     <div className="app">
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
+      )}
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
