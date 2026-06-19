@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
+import AuthPage from './components/AuthPage';
+import { useAuth } from './AuthContext';
+import { supabase } from './supabase';
 import { apiUrl } from './api';
 import './App.css';
 
@@ -24,6 +27,8 @@ const DEFAULT_MODELS = [
 ];
 
 export default function App() {
+  const { user, loading: authLoading, getAccessToken, signOut } = useAuth();
+
   const [conversations, setConversations] = useState([
     { id: createId(), title: 'New conversation', messages: [] },
   ]);
@@ -38,6 +43,15 @@ export default function App() {
   const selectedModelLabel =
     models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
 
+  // Helper to make authenticated API calls
+  const authFetch = useCallback(async (url, options = {}) => {
+    const token = await getAccessToken();
+    const headers = { ...options.headers };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return fetch(url, { ...options, headers });
+  }, [getAccessToken]);
+
+  // Load models
   useEffect(() => {
     fetch(apiUrl('/api/models'))
       .then((res) => res.json())
@@ -53,18 +67,59 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Load conversations from Supabase when user logs in
+  useEffect(() => {
+    if (!user || !supabase) return;
+
+    authFetch(apiUrl('/api/conversations'))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.conversations?.length) {
+          const loaded = data.conversations.map((c) => ({
+            id: c.id,
+            title: c.title,
+            messages: [],
+            dbId: c.id,
+            loaded: false,
+          }));
+          setConversations(loaded);
+          setActiveId(loaded[0].id);
+        }
+      })
+      .catch(() => {});
+  }, [user, authFetch]);
+
+  // Load messages when switching to a conversation that hasn't been loaded
+  useEffect(() => {
+    if (!user || !supabase || !activeId || tempChat) return;
+
+    const conv = conversations.find((c) => c.id === activeId);
+    if (!conv || conv.loaded || !conv.dbId) return;
+
+    authFetch(apiUrl(`/api/conversations/${conv.dbId}`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.conversation?.messages) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeId
+                ? { ...c, messages: data.conversation.messages, loaded: true }
+                : c
+            )
+          );
+        }
+      })
+      .catch(() => {});
+  }, [activeId, user, conversations, tempChat, authFetch]);
+
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 901px)');
-    const handleChange = (e) => {
-      if (e.matches) setSidebarOpen(false);
-    };
+    const handleChange = (e) => { if (e.matches) setSidebarOpen(false); };
     mq.addEventListener('change', handleChange);
     return () => mq.removeEventListener('change', handleChange);
   }, []);
@@ -75,8 +130,57 @@ export default function App() {
     );
   };
 
+  // Save conversation to DB
+  const saveConversationToDb = useCallback(async (conv) => {
+    if (!user || !supabase || !conv) return;
+
+    try {
+      const token = await getAccessToken();
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+      if (!conv.dbId) {
+        // Create new conversation in DB
+        const res = await fetch(apiUrl('/api/conversations'), {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ title: conv.title }),
+        });
+        const data = await res.json();
+        if (data.conversation) {
+          const dbId = data.conversation.id;
+          setConversations((prev) =>
+            prev.map((c) => (c.id === conv.id ? { ...c, dbId } : c))
+          );
+          return dbId;
+        }
+      }
+      return conv.dbId;
+    } catch {
+      return conv.dbId;
+    }
+  }, [user, getAccessToken]);
+
+  // Save messages after response completes
+  const saveMessagesToDb = useCallback(async (convId, dbId, userMsg, assistantMsg) => {
+    if (!user || !supabase || !dbId) return;
+
+    try {
+      const token = await getAccessToken();
+      await fetch(apiUrl(`/api/conversations/${dbId}/messages`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          messages: [
+            { role: 'user', content: userMsg.content },
+            { role: 'assistant', content: assistantMsg.content, reasoning: assistantMsg.reasoning, modelLabel: assistantMsg.modelLabel },
+          ],
+        }),
+      });
+    } catch { /* silent fail */ }
+  }, [user, getAccessToken]);
+
   const handleNewChat = () => {
-    const newChat = { id: createId(), title: 'New conversation', messages: [] };
+    const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
     setConversations((prev) => [newChat, ...prev]);
     setActiveId(newChat.id);
     setSelectedModel(DEFAULT_MODELS[0].id);
@@ -96,11 +200,24 @@ export default function App() {
     setSidebarOpen(false);
   };
 
-  const handleDeleteChat = (id) => {
+  const handleDeleteChat = async (id) => {
+    const conv = conversations.find((c) => c.id === id);
+
+    // Delete from DB if it exists there
+    if (conv?.dbId && user) {
+      try {
+        const token = await getAccessToken();
+        await fetch(apiUrl(`/api/conversations/${conv.dbId}`), {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch { /* continue with local delete */ }
+    }
+
     setConversations((prev) => {
       const filtered = prev.filter((c) => c.id !== id);
       if (filtered.length === 0) {
-        const newChat = { id: createId(), title: 'New conversation', messages: [] };
+        const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
         setActiveId(newChat.id);
         return [newChat];
       }
@@ -120,6 +237,7 @@ export default function App() {
       .map(({ role, content: text }) => ({ role, content: text.trim() }));
 
     const isTemp = Boolean(tempChat);
+    const currentActiveId = activeId;
 
     if (isTemp) {
       setTempChat((prev) => ({
@@ -127,11 +245,12 @@ export default function App() {
         messages: [...prev.messages, userMessage, { role: 'assistant', content: '' }],
       }));
     } else {
+      const newTitle = activeConversation.messages.length === 0
+        ? content.trim().slice(0, 40) + (content.length > 40 ? '…' : '')
+        : undefined;
+
       updateConversation(activeId, (c) => ({
-        title:
-          c.messages.length === 0
-            ? content.trim().slice(0, 40) + (content.length > 40 ? '…' : '')
-            : c.title,
+        title: newTitle || c.title,
         messages: [...c.messages, userMessage, { role: 'assistant', content: '' }],
       }));
     }
@@ -145,17 +264,25 @@ export default function App() {
           return { ...prev, ...result };
         });
       } else {
-        updateConversation(activeId, updater);
+        updateConversation(currentActiveId, updater);
       }
     };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
+    let finalContent = '';
+    let finalReasoning = '';
+    let finalModelLabel = '';
+
     try {
+      const token = await getAccessToken();
+      const fetchHeaders = { 'Content-Type': 'application/json' };
+      if (token) fetchHeaders['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: fetchHeaders,
         body: JSON.stringify({
           messages: apiMessages,
           model: selectedModel,
@@ -173,7 +300,6 @@ export default function App() {
       const decoder = new TextDecoder();
       let accumulated = '';
       let reasoningAccum = '';
-      let statusHint = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -194,17 +320,14 @@ export default function App() {
             if (parsed.info) {
               updateActiveMessages((c) => {
                 const msgs = [...c.messages];
-                msgs[msgs.length - 1] = {
-                  ...msgs[msgs.length - 1],
-                  fallbackNotice: parsed.info,
-                };
+                msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], fallbackNotice: parsed.info };
                 return { messages: msgs };
               });
             }
 
             if (parsed.status) {
               const label = parsed.modelLabel || '';
-              statusHint =
+              const statusHint =
                 parsed.status === 'connecting' && label.includes('Pro')
                   ? 'Connecting to Pro — this model can take up to a minute…'
                   : parsed.status === 'connecting'
@@ -215,22 +338,13 @@ export default function App() {
               updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
-                msgs[msgs.length - 1] = {
-                  ...prev,
-                  statusHint,
-                  modelLabel: parsed.modelLabel || prev.modelLabel,
-                };
+                msgs[msgs.length - 1] = { ...prev, statusHint, modelLabel: parsed.modelLabel || prev.modelLabel };
                 return { messages: msgs };
               });
             }
 
-            if (parsed.reasoning) {
-              reasoningAccum += parsed.reasoning;
-            }
-
-            if (parsed.content) {
-              accumulated += parsed.content;
-            }
+            if (parsed.reasoning) reasoningAccum += parsed.reasoning;
+            if (parsed.content) accumulated += parsed.content;
 
             if (parsed.reasoning || parsed.content) {
               updateActiveMessages((c) => {
@@ -249,13 +363,11 @@ export default function App() {
             }
 
             if (parsed.meta?.modelLabel) {
+              finalModelLabel = parsed.meta.modelLabel;
               updateActiveMessages((c) => {
                 const msgs = [...c.messages];
                 const prev = msgs[msgs.length - 1];
-                msgs[msgs.length - 1] = {
-                  ...prev,
-                  modelLabel: parsed.meta.modelLabel,
-                };
+                msgs[msgs.length - 1] = { ...prev, modelLabel: parsed.meta.modelLabel };
                 return { messages: msgs };
               });
             }
@@ -264,6 +376,9 @@ export default function App() {
           }
         }
       }
+
+      finalContent = accumulated;
+      finalReasoning = reasoningAccum;
     } catch (error) {
       const message =
         error.name === 'AbortError'
@@ -271,27 +386,60 @@ export default function App() {
           : error.message;
       updateActiveMessages((c) => {
         const msgs = [...c.messages];
-        msgs[msgs.length - 1] = {
-          role: 'assistant',
-          content: `Error: ${message}`,
-          isError: true,
-        };
+        msgs[msgs.length - 1] = { role: 'assistant', content: `Error: ${message}`, isError: true };
         return { messages: msgs };
       });
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);
+
+      // Persist to DB (skip temp chats and errors)
+      if (!isTemp && finalContent && user) {
+        const conv = conversations.find((c) => c.id === currentActiveId) ||
+          { id: currentActiveId, title: content.trim().slice(0, 40), dbId: null };
+        const dbId = await saveConversationToDb(conv);
+        if (dbId) {
+          await saveMessagesToDb(currentActiveId, dbId, userMessage, {
+            content: finalContent,
+            reasoning: finalReasoning || undefined,
+            modelLabel: finalModelLabel || undefined,
+          });
+
+          // Update title in DB if it was just set
+          if (activeConversation.messages.length === 0) {
+            try {
+              const token = await getAccessToken();
+              const newTitle = content.trim().slice(0, 40) + (content.length > 40 ? '…' : '');
+              await fetch(apiUrl(`/api/conversations/${dbId}`), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ title: newTitle }),
+              });
+            } catch { /* silent */ }
+          }
+        }
+      }
     }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="app app-loading">
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+
+  // Show auth page if not logged in (and supabase is configured)
+  if (!user && supabase) {
+    return <AuthPage />;
+  }
 
   return (
     <div className="app">
       {sidebarOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
       <Sidebar
         conversations={conversations}
@@ -304,6 +452,8 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         activeModelLabel={selectedModelLabel}
         isTempActive={Boolean(tempChat)}
+        user={user}
+        onSignOut={signOut}
       />
       <ChatArea
         conversation={activeConversation}

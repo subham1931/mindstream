@@ -19,5 +19,9 @@ services:
         sync: false
       - key: NVIDIA_API_KEYS
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: CLIENT_URL
         sync: false

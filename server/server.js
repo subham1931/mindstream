@@ -10,6 +10,8 @@ import {
   prepareMessages,
   getModelLabel,
 } from './models.js';
+import { authMiddleware } from './supabase.js';
+import conversationsRouter from './routes/conversations.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -52,6 +54,10 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(authMiddleware);
+
+// Conversation persistence routes
+app.use('/api/conversations', conversationsRouter);
 
 const modelRoutes = loadModelRoutes();
 const keyCooldownUntil = new Map();
