@@ -49,6 +49,17 @@ export const MODEL_PROFILES = [
     timeoutMs: 90000,
   },
   {
+    id: 'google/gemma-4-31b-it',
+    label: 'Gemma 4 31B IT',
+    keyEnv: 'NVIDIA_KEY_GEMMA',
+    temperature: 1,
+    top_p: 0.95,
+    max_tokens: 16384,
+    chat_template_kwargs: { enable_thinking: true },
+    hasReasoning: true,
+    timeoutMs: 90000,
+  },
+  {
     id: 'deepseek-ai/deepseek-v4-flash',
     label: 'DeepSeek V4 Flash',
     keyEnv: 'NVIDIA_KEY_DEEPSEEK',
@@ -82,6 +93,7 @@ export function loadModelRoutes() {
   const proKey = process.env.NVIDIA_KEY_DEEPSEEK_PRO?.trim();
   const kimiKey = process.env.NVIDIA_KEY_KIMI?.trim();
   const qwenKey = process.env.NVIDIA_KEY_QWEN?.trim();
+  const gemmaKey = process.env.NVIDIA_KEY_GEMMA?.trim();
 
   return MODEL_PROFILES.map((profile, index) => {
     let apiKey = process.env[profile.keyEnv]?.trim();
@@ -91,6 +103,8 @@ export function loadModelRoutes() {
         apiKey = kimiKey || genericKeys[0];
       } else if (profile.id.includes('qwen')) {
         apiKey = qwenKey || genericKeys[0];
+      } else if (profile.id.includes('gemma')) {
+        apiKey = gemmaKey || genericKeys[0];
       } else if (profile.id.includes('flash')) {
         apiKey = flashKey || genericKeys[0];
       } else if (profile.id.includes('pro')) {
