@@ -6,11 +6,30 @@ import OpenAI from 'openai';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+function normalizeOrigin(url) {
+  return url?.replace(/\/$/, '') || '';
+}
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  process.env.CLIENT_URL,
-].filter(Boolean);
+  ...(process.env.CLIENT_URL || '')
+    .split(',')
+    .map((url) => normalizeOrigin(url.trim()))
+    .filter(Boolean),
+];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  const normalized = normalizeOrigin(origin);
+  if (allowedOrigins.includes(normalized)) return true;
+
+  // Allow all Vercel production and preview deployments
+  if (/^https:\/\/[\w-]+\.vercel\.app$/.test(normalized)) return true;
+
+  return false;
+}
 
 const openai = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY,
@@ -20,10 +39,11 @@ const openai = new OpenAI({
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(null, false);
       }
     },
   })

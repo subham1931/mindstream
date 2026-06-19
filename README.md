@@ -27,7 +27,7 @@ Open http://localhost:5173
 2. Render → **New** → **Blueprint** → connect [subham1931/mindstream](https://github.com/subham1931/mindstream)
 3. Set environment variables:
    - `NVIDIA_API_KEY` — your NVIDIA API key
-   - `CLIENT_URL` — your Vercel frontend URL (e.g. `https://mindstream.vercel.app`)
+   - `CLIENT_URL` — optional; Vercel `*.vercel.app` URLs are allowed automatically
 4. Deploy. Copy the backend URL (e.g. `https://mindstream-api.onrender.com`)
 
 ### 2. Frontend — [Vercel](https://vercel.com) (free tier)
