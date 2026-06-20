@@ -227,28 +227,100 @@
 }
 
 .delete-btn {
+  display: none;
+}
+
+.conv-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.conv-menu-btn {
   opacity: 0;
   width: 26px;
   height: 26px;
   border-radius: 50%;
   color: var(--text-muted);
-  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
 
-@media (hover: hover) {
-  .conversation-item:hover .delete-btn {
-    opacity: 1;
-  }
+.conversation-item:hover .conv-menu-btn,
+.conversation-item.active .conv-menu-btn {
+  opacity: 1;
 }
 
-.delete-btn:hover {
-  background: rgba(220, 80, 80, 0.15);
+.conv-menu-btn:hover {
+  background: var(--surface-btn-hover);
+  color: var(--text-primary);
+}
+
+.conv-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 4px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: menuFadeIn 0.12s ease-out;
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.conv-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.conv-menu-item:hover {
+  background: var(--surface-btn);
+  color: var(--text-primary);
+}
+
+.conv-menu-item.danger:hover {
+  background: rgba(220, 80, 80, 0.12);
   color: #e88;
+}
+
+.rename-input {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #e8a04a;
+  background: var(--surface-btn);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+
+.conversation-item.pinned .conversation-icon {
+  color: #e8a04a;
+  border-color: rgba(232, 160, 74, 0.25);
 }
 
 .sidebar-footer {
@@ -441,14 +513,9 @@
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
-  .conversation-item:hover .delete-btn,
-  .delete-btn {
+  .conversation-item:hover .conv-menu-btn,
+  .conv-menu-btn {
     opacity: 1;
-  }
-
-  .delete-btn {
-    width: 32px;
-    height: 32px;
   }
 }
 

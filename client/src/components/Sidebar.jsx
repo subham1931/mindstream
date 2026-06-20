@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import './Sidebar.css';
 
 function PlusIcon() {
@@ -44,7 +45,133 @@ function ChatIcon() {
   );
 }
 
-export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onClose, activeModelLabel, isTempActive, user, onSignOut, onShowAuth }) {
+function PinIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path d="M12 17v5M9 3h6l-1 7h3l-5 7-5-7h3l-1-7z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ConversationItem({ conv, isActive, onSelect, onDelete, onRename, onPin }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(conv.title);
+  const menuRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e) => {
+      if (menuRef.current?.contains(e.target)) return;
+      setMenuOpen(false);
+    };
+    const timer = setTimeout(() => document.addEventListener('mousedown', close), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('mousedown', close); };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  const handleRenameSubmit = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== conv.title) {
+      onRename(conv.id, trimmed);
+    }
+    setIsRenaming(false);
+  };
+
+  return (
+    <div
+      className={`conversation-item ${isActive ? 'active' : ''} ${conv.pinned ? 'pinned' : ''}`}
+      onClick={() => !isRenaming && onSelect(conv.id)}
+    >
+      <span className="conversation-icon">
+        {conv.pinned ? <PinIcon /> : <ChatIcon />}
+      </span>
+
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          className="rename-input"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onBlur={handleRenameSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRenameSubmit();
+            if (e.key === 'Escape') { setRenameValue(conv.title); setIsRenaming(false); }
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="conversation-title">{conv.title}</span>
+      )}
+
+      <div className="conv-menu-wrap" ref={menuRef}>
+        <button
+          className="conv-menu-btn"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+          aria-label="More options"
+        >
+          <MoreIcon />
+        </button>
+
+        {menuOpen && (
+          <div className="conv-menu" role="menu">
+            <button
+              role="menuitem"
+              className="conv-menu-item"
+              onClick={(e) => { e.stopPropagation(); onPin(conv.id); setMenuOpen(false); }}
+            >
+              <PinIcon />
+              <span>{conv.pinned ? 'Unpin' : 'Pin'}</span>
+            </button>
+            <button
+              role="menuitem"
+              className="conv-menu-item"
+              onClick={(e) => { e.stopPropagation(); setIsRenaming(true); setRenameValue(conv.title); setMenuOpen(false); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>Rename</span>
+            </button>
+            <button
+              role="menuitem"
+              className="conv-menu-item danger"
+              onClick={(e) => { e.stopPropagation(); onDelete(conv.id); setMenuOpen(false); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onRename, onPin, onClose, activeModelLabel, isTempActive, user, onSignOut, onShowAuth }) {
+  const pinnedConvs = conversations.filter((c) => c.pinned);
+  const unpinnedConvs = conversations.filter((c) => !c.pinned);
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-panel">
@@ -69,30 +196,36 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
         </div>
 
         <div className="sidebar-section">
+          {pinnedConvs.length > 0 && (
+            <>
+              <span className="section-label">Pinned</span>
+              <div className="conversation-list">
+                {pinnedConvs.map((conv) => (
+                  <ConversationItem
+                    key={conv.id}
+                    conv={conv}
+                    isActive={conv.id === activeId}
+                    onSelect={onSelect}
+                    onDelete={onDelete}
+                    onRename={onRename}
+                    onPin={onPin}
+                  />
+                ))}
+              </div>
+            </>
+          )}
           <span className="section-label">Chats</span>
           <div className="conversation-list">
-            {conversations.map((conv) => (
-              <div
+            {unpinnedConvs.map((conv) => (
+              <ConversationItem
                 key={conv.id}
-                className={`conversation-item ${conv.id === activeId ? 'active' : ''}`}
-                onClick={() => onSelect(conv.id)}
-              >
-                <span className="conversation-icon">
-                  <ChatIcon />
-                </span>
-                <span className="conversation-title">{conv.title}</span>
-                <button
-                  className="delete-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(conv.id);
-                  }}
-                  title="Delete chat"
-                  aria-label="Delete chat"
-                >
-                  ×
-                </button>
-              </div>
+                conv={conv}
+                isActive={conv.id === activeId}
+                onSelect={onSelect}
+                onDelete={onDelete}
+                onRename={onRename}
+                onPin={onPin}
+              />
             ))}
           </div>
         </div>

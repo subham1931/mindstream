@@ -236,6 +236,27 @@ export default function App() {
     });
   };
 
+  const handleRenameChat = (id, newTitle) => {
+    updateConversation(id, () => ({ title: newTitle }));
+    // Update in DB if exists
+    const conv = conversations.find((c) => c.id === id);
+    if (conv?.dbId && user) {
+      getAccessToken().then((token) => {
+        fetch(apiUrl(`/api/conversations/${conv.dbId}`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title: newTitle }),
+        }).catch(() => {});
+      });
+    }
+  };
+
+  const handlePinChat = (id) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
+    );
+  };
+
   const handleSend = async (content) => {
     if (!content.trim() || isLoading || !activeConversation) return;
 
@@ -470,6 +491,8 @@ export default function App() {
         onNewChat={handleNewChat}
         onTempChat={handleTempChat}
         onDelete={handleDeleteChat}
+        onRename={handleRenameChat}
+        onPin={handlePinChat}
         onClose={() => setSidebarOpen(false)}
         activeModelLabel={selectedModelLabel}
         isTempActive={Boolean(tempChat)}
