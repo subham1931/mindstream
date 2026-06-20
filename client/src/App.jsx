@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import AuthModal from './components/AuthModal';
@@ -19,8 +19,8 @@ function createId() {
 
 const DEFAULT_MODELS = [
   { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
-  { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
   { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen 3.5 122B' },
+  { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6' },
   { id: 'google/gemma-4-31b-it', label: 'Gemma 4 31B IT' },
   { id: 'deepseek-ai/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
   { id: 'deepseek-ai/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
@@ -43,6 +43,9 @@ export default function App() {
   const [guestMessageCount, setGuestMessageCount] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('signin');
+
+  const abortControllerRef = useRef(null);
+  const stopRequestedRef = useRef(false);
 
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const selectedModelLabel =
@@ -270,6 +273,12 @@ export default function App() {
     }
   };
 
+  const handleStop = useCallback(() => {
+    if (!abortControllerRef.current) return;
+    stopRequestedRef.current = true;
+    abortControllerRef.current.abort();
+  }, []);
+
   const handleSend = async (content) => {
     if (!content.trim() || isLoading || !activeConversation) return;
 
@@ -322,6 +331,7 @@ export default function App() {
     };
 
     const controller = new AbortController();
+    abortControllerRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     let finalContent = '';
@@ -438,21 +448,39 @@ export default function App() {
         setGuestMessageCount((prev) => prev + 1);
       }
     } catch (error) {
-      const message =
-        error.name === 'AbortError'
-          ? 'Request timed out. Pro model can be slow — try again or use Flash.'
-          : error.message;
-      updateActiveMessages((c) => {
-        const msgs = [...c.messages];
-        msgs[msgs.length - 1] = { role: 'assistant', content: `Error: ${message}`, isError: true };
-        return { messages: msgs };
-      });
+      if (error.name === 'AbortError' && stopRequestedRef.current) {
+        updateActiveMessages((c) => {
+          const msgs = [...c.messages];
+          const prev = msgs[msgs.length - 1];
+          if (prev?.role === 'assistant') {
+            if (!prev.content?.trim() && !prev.reasoning?.trim()) {
+              msgs.pop();
+            } else {
+              msgs[msgs.length - 1] = { ...prev, statusHint: undefined };
+            }
+          }
+          return { messages: msgs };
+        });
+      } else {
+        const message =
+          error.name === 'AbortError'
+            ? 'Request timed out. Pro model can be slow — try again or use Flash.'
+            : error.message;
+        updateActiveMessages((c) => {
+          const msgs = [...c.messages];
+          msgs[msgs.length - 1] = { role: 'assistant', content: `Error: ${message}`, isError: true };
+          return { messages: msgs };
+        });
+      }
     } finally {
       clearTimeout(timeoutId);
+      const wasStopped = stopRequestedRef.current;
+      stopRequestedRef.current = false;
+      abortControllerRef.current = null;
       setIsLoading(false);
 
-      // Persist to DB (skip temp chats and errors)
-      if (!isTemp && finalContent && user) {
+      // Persist to DB (skip temp chats, errors, and user-stopped responses)
+      if (!isTemp && finalContent && user && !wasStopped) {
         const conv = conversations.find((c) => c.id === currentActiveId) ||
           { id: currentActiveId, title: content.trim().slice(0, 40), dbId: null };
         const dbId = await saveConversationToDb(conv);
@@ -502,13 +530,11 @@ export default function App() {
         isOpen={sidebarOpen}
         onSelect={handleSelectChat}
         onNewChat={handleNewChat}
-        onTempChat={handleTempChat}
         onDelete={handleDeleteChat}
         onRename={handleRenameChat}
         onPin={handlePinChat}
         onClose={() => setSidebarOpen(false)}
         activeModelLabel={selectedModelLabel}
-        isTempActive={Boolean(tempChat)}
         user={user}
         onSignOut={() => {
           signOut();
@@ -523,8 +549,10 @@ export default function App() {
         conversation={activeConversation}
         isLoading={isLoading}
         onSend={handleSend}
+        onStop={handleStop}
         onToggleSidebar={() => setSidebarOpen(true)}
         onNewChat={handleNewChat}
+        onTempChat={handleTempChat}
         models={models}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}

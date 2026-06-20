@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import {
   MODEL_PROFILES,
   loadModelRoutes,
@@ -37,6 +37,7 @@ function isAllowedOrigin(origin) {
   if (!origin) return true;
   const normalized = normalizeOrigin(origin);
   if (allowedOrigins.includes(normalized)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)) return true;
   if (/^https:\/\/[\w-]+\.vercel\.app$/.test(normalized)) return true;
   return false;
 }
@@ -53,7 +54,7 @@ app.use(
     },
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 app.use(authMiddleware);
 
 // Conversation persistence routes
@@ -190,11 +191,25 @@ async function completeWithPool(messages, stream, requestedModel) {
   throw lastError || Object.assign(new Error('All models rate limited'), { status: 429 });
 }
 
+const STT_MODEL = process.env.STT_MODEL || 'whisper-1';
+
+function getSttConfig() {
+  const apiKey = process.env.STT_API_KEY || process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  return {
+    apiKey,
+    baseURL: process.env.STT_BASE_URL || 'https://api.openai.com/v1',
+    model: STT_MODEL,
+  };
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     models: modelRoutes.map((r) => ({ id: r.id, label: r.label })),
     defaultModel: modelRoutes[0]?.id,
+    transcriptionAvailable: Boolean(getSttConfig()),
   });
 });
 
@@ -304,6 +319,47 @@ app.post('/api/chat', async (req, res) => {
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
       res.end();
     }
+  }
+});
+
+app.post('/api/transcribe', async (req, res) => {
+  const { audio, mimeType = 'audio/webm' } = req.body;
+
+  if (!audio || typeof audio !== 'string') {
+    return res.status(400).json({ error: 'Audio data is required' });
+  }
+
+  const sttConfig = getSttConfig();
+  if (!sttConfig) {
+    return res.status(503).json({
+      error:
+        'Server transcription is not configured. Set OPENAI_API_KEY in server/.env, or allow Chrome to reach Google speech services (disable ad blockers/VPN).',
+      code: 'STT_NOT_CONFIGURED',
+    });
+  }
+
+  try {
+    const buffer = Buffer.from(audio, 'base64');
+    if (!buffer.length) {
+      return res.status(400).json({ error: 'Audio data is empty' });
+    }
+
+    const extension = mimeType.includes('wav') ? 'wav' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const client = new OpenAI({
+      apiKey: sttConfig.apiKey,
+      baseURL: sttConfig.baseURL,
+      timeout: 60000,
+    });
+    const transcription = await client.audio.transcriptions.create({
+      file: await toFile(buffer, `recording.${extension}`, { type: mimeType }),
+      model: sttConfig.model,
+    });
+
+    res.json({ text: transcription.text?.trim() || '' });
+  } catch (error) {
+    const { status, message } = formatApiError(error);
+    console.error('Transcription error:', message);
+    res.status(status).json({ error: message || 'Transcription failed' });
   }
 });
 

@@ -5,7 +5,21 @@ import './ChatArea.css';
 
 const SCROLL_THRESHOLD = 100;
 
-export default function ChatArea({ conversation, isLoading, onSend, onToggleSidebar, onNewChat, models, selectedModel, onModelChange, isTempChat }) {
+function IncognitoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 4C9 4 6.5 5.5 5 8h14c-1.5-2.5-4-4-7-4zM3 10h18M5 12c0 2.5 1.5 4.5 3.5 5.5M19 12c0 2.5-1.5 4.5-3.5 5.5M8.5 17.5a2.5 2.5 0 1 0 0 .01M15.5 17.5a2.5 2.5 0 1 0 0 .01"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export default function ChatArea({ conversation, isLoading, onSend, onStop, onToggleSidebar, onNewChat, onTempChat, models, selectedModel, onModelChange, isTempChat }) {
   const scrollRef = useRef(null);
   const isPinnedRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -63,6 +77,18 @@ export default function ChatArea({ conversation, isLoading, onSend, onToggleSide
 
   return (
     <main className="chat-area">
+      {!isTempChat && (
+        <div className="chat-top-bar">
+          <button
+            className="temp-chat-btn"
+            onClick={onTempChat}
+            title="Temporary chat — not saved to history"
+            aria-label="Temporary chat"
+          >
+            <IncognitoIcon />
+          </button>
+        </div>
+      )}
       {isTempChat && (
         <div className="temp-chat-banner" role="status">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -87,11 +113,23 @@ export default function ChatArea({ conversation, isLoading, onSend, onToggleSide
           <div className="mobile-header-avatar" aria-hidden="true" />
           <span className="mobile-header-title">MindStream</span>
         </div>
-        <button className="icon-btn" onClick={onNewChat} aria-label="New chat">
+        <div className="mobile-header-actions">
+          {!isTempChat && (
+            <button
+              className="temp-chat-btn temp-chat-btn--mobile"
+              onClick={onTempChat}
+              title="Temporary chat — not saved to history"
+              aria-label="Temporary chat"
+            >
+              <IncognitoIcon />
+            </button>
+          )}
+          <button className="icon-btn" onClick={onNewChat} aria-label="New chat">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-        </button>
+          </button>
+        </div>
       </header>
 
       <div className="chat-scroll-container">
@@ -130,6 +168,7 @@ export default function ChatArea({ conversation, isLoading, onSend, onToggleSide
       <div className="chat-input-slot">
         <ChatInput
           onSend={handleSend}
+          onStop={onStop}
           isLoading={isLoading}
           showGreeting={isEmpty}
           models={models}

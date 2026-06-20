@@ -254,6 +254,15 @@
   animation: mic-glow 1.5s ease-in-out infinite;
 }
 
+.action-btn.stopping {
+  background: #2a2018;
+  color: #f5e6d8;
+}
+
+.action-btn.stopping:hover:not(:disabled) {
+  background: #3d3028;
+}
+
 @keyframes mic-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(232, 160, 74, 0.4); }
   50% { box-shadow: 0 0 0 6px rgba(232, 160, 74, 0); }
