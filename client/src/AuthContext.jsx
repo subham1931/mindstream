@@ -20,6 +20,10 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      // Clean up the URL fragment after OAuth redirect
+      if (_event === 'SIGNED_IN' && window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     });
 
     return () => subscription.unsubscribe();
