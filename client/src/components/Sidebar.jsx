@@ -169,9 +169,6 @@ function ConversationItem({ conv, isActive, onSelect, onDelete, onRename, onPin 
 }
 
 export default function Sidebar({ conversations, activeId, isOpen, onSelect, onNewChat, onTempChat, onDelete, onRename, onPin, onClose, activeModelLabel, isTempActive, user, onSignOut, onShowAuth }) {
-  const pinnedConvs = conversations.filter((c) => c.pinned);
-  const unpinnedConvs = conversations.filter((c) => !c.pinned);
-
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-panel">
@@ -196,27 +193,9 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
         </div>
 
         <div className="sidebar-section">
-          {pinnedConvs.length > 0 && (
-            <>
-              <span className="section-label">Pinned</span>
-              <div className="conversation-list">
-                {pinnedConvs.map((conv) => (
-                  <ConversationItem
-                    key={conv.id}
-                    conv={conv}
-                    isActive={conv.id === activeId}
-                    onSelect={onSelect}
-                    onDelete={onDelete}
-                    onRename={onRename}
-                    onPin={onPin}
-                  />
-                ))}
-              </div>
-            </>
-          )}
           <span className="section-label">Chats</span>
           <div className="conversation-list">
-            {unpinnedConvs.map((conv) => (
+            {[...conversations].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).map((conv) => (
               <ConversationItem
                 key={conv.id}
                 conv={conv}

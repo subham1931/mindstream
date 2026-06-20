@@ -87,6 +87,7 @@ export default function App() {
           const loaded = data.conversations.map((c) => ({
             id: c.id,
             title: c.title,
+            pinned: c.pinned || false,
             messages: [],
             dbId: c.id,
             loaded: false,
@@ -252,9 +253,21 @@ export default function App() {
   };
 
   const handlePinChat = (id) => {
+    const conv = conversations.find((c) => c.id === id);
+    const newPinned = !conv?.pinned;
     setConversations((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
+      prev.map((c) => (c.id === id ? { ...c, pinned: newPinned } : c))
     );
+    // Persist to DB
+    if (conv?.dbId && user) {
+      getAccessToken().then((token) => {
+        fetch(apiUrl(`/api/conversations/${conv.dbId}`), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ pinned: newPinned }),
+        }).catch(() => {});
+      });
+    }
   };
 
   const handleSend = async (content) => {

@@ -5,6 +5,7 @@ create table if not exists conversations (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null default 'New conversation',
+  pinned boolean not null default false,
   created_at timestamptz default now() not null,
   updated_at timestamptz default now() not null
 );

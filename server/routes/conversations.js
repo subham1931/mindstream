@@ -8,7 +8,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('conversations')
-      .select('id, title, created_at, updated_at')
+      .select('id, title, pinned, created_at, updated_at')
       .eq('user_id', req.user.id)
       .order('updated_at', { ascending: false });
 
@@ -78,14 +78,17 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// Update conversation title
+// Update conversation (title, pinned)
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, pinned } = req.body;
+    const updates = { updated_at: new Date().toISOString() };
+    if (title !== undefined) updates.title = title;
+    if (pinned !== undefined) updates.pinned = pinned;
 
     const { data, error } = await supabase
       .from('conversations')
-      .update({ title, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', req.params.id)
       .eq('user_id', req.user.id)
       .select()
