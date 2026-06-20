@@ -43,6 +43,7 @@ export default function AuthModal({ onClose, defaultMode = 'signin' }) {
   const { signIn, signUp, signInWithOAuth } = useAuth();
   const [isSignUp, setIsSignUp] = useState(defaultMode === 'signup');
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -65,10 +66,11 @@ export default function AuthModal({ onClose, defaultMode = 'signin' }) {
 
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        await signUp(email, password, fullName);
         setSuccess('Account created! Check your email to confirm, then sign in.');
         setIsSignUp(false);
         setConfirmPassword('');
+        setFullName('');
       } else {
         await signIn(email, password);
         onClose();
@@ -117,6 +119,21 @@ export default function AuthModal({ onClose, defaultMode = 'signin' }) {
         <form onSubmit={handleSubmit} className="auth-modal-form">
           {error && <div className="auth-modal-error" role="alert">{error}</div>}
           {success && <div className="auth-modal-success" role="status">{success}</div>}
+
+          {isSignUp && (
+            <div className="auth-modal-field">
+              <label htmlFor="auth-name">Full Name</label>
+              <input
+                id="auth-name"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="John Doe"
+                required
+                autoComplete="name"
+              />
+            </div>
+          )}
 
           <div className="auth-modal-field">
             <label htmlFor="auth-email">Email</label>

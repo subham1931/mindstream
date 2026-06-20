@@ -100,8 +100,15 @@ export default function Sidebar({ conversations, activeId, isOpen, onSelect, onN
         <div className="sidebar-footer">
           {user ? (
             <div className="user-section">
-              <div className="user-avatar">{user.email?.[0]?.toUpperCase() || 'U'}</div>
-              <span className="user-email">{user.email}</span>
+              {user.user_metadata?.avatar_url ? (
+                <img className="user-avatar-img" src={user.user_metadata.avatar_url} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="user-avatar">{(user.user_metadata?.full_name || user.email)?.[0]?.toUpperCase() || 'U'}</div>
+              )}
+              <div className="user-info">
+                <span className="user-name">{user.user_metadata?.full_name || 'User'}</span>
+                <span className="user-email">{user.email}</span>
+              </div>
               <button className="sign-out-btn" onClick={onSignOut} title="Sign out" aria-label="Sign out">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

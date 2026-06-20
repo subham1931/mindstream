@@ -25,9 +25,13 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email, password) => {
+  const signUp = async (email, password, fullName) => {
     if (!supabase) throw new Error('Auth not configured');
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } },
+    });
     if (error) throw error;
     return data;
   };

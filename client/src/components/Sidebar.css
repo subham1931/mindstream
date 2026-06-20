@@ -283,13 +283,36 @@
   flex-shrink: 0;
 }
 
+.user-avatar-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
 .user-email {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 11px;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   flex: 1;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sign-out-btn {
