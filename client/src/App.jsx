@@ -17,6 +17,20 @@ function createId() {
   });
 }
 
+function createDraftConversation() {
+  return { id: createId(), title: 'New conversation', messages: [], loaded: true };
+}
+
+function isStartedConversation(conv) {
+  if (!conv) return false;
+  if (conv.dbId) return true;
+  return (conv.messages?.length ?? 0) > 0;
+}
+
+function withSingleDraft(conversations, draft = createDraftConversation()) {
+  return [draft, ...conversations.filter(isStartedConversation)];
+}
+
 const DEFAULT_MODELS = [
   { id: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct' },
   { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen 3.5 122B' },
@@ -31,9 +45,7 @@ const FREE_MESSAGE_LIMIT = 0;
 export default function App() {
   const { user, loading: authLoading, getAccessToken, signOut } = useAuth();
 
-  const [conversations, setConversations] = useState([
-    { id: createId(), title: 'New conversation', messages: [] },
-  ]);
+  const [conversations, setConversations] = useState(() => [createDraftConversation()]);
   const [activeId, setActiveId] = useState(conversations[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -48,6 +60,7 @@ export default function App() {
   const stopRequestedRef = useRef(false);
 
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
+  const sidebarConversations = conversations.filter(isStartedConversation);
   const selectedModelLabel =
     models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
 
@@ -95,9 +108,9 @@ export default function App() {
             dbId: c.id,
             loaded: false,
           }));
-          const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
-          setConversations([newChat, ...loaded]);
-          setActiveId(newChat.id);
+          const draft = createDraftConversation();
+          setConversations(withSingleDraft(loaded, draft));
+          setActiveId(draft.id);
         }
       })
       .catch(() => {});
@@ -193,11 +206,22 @@ export default function App() {
   }, [user, getAccessToken]);
 
   const handleNewChat = () => {
-    const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
-    setConversations((prev) => [newChat, ...prev]);
-    setActiveId(newChat.id);
+    if (tempChat) {
+      setTempChat(null);
+    }
+
+    const active = conversations.find((c) => c.id === activeId);
+    if (active && !isStartedConversation(active)) {
+      setSidebarOpen(false);
+      return;
+    }
+
+    setConversations((prev) => {
+      const draft = prev.find((c) => !isStartedConversation(c)) || createDraftConversation();
+      setActiveId(draft.id);
+      return withSingleDraft(prev, draft);
+    });
     setSelectedModel(DEFAULT_MODELS[0].id);
-    setTempChat(null);
     setSidebarOpen(false);
   };
 
@@ -228,15 +252,17 @@ export default function App() {
 
     setConversations((prev) => {
       const filtered = prev.filter((c) => c.id !== id);
-      if (filtered.length === 0) {
-        const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
-        setActiveId(newChat.id);
-        return [newChat];
+      const started = filtered.filter(isStartedConversation);
+      if (started.length === 0) {
+        const draft = createDraftConversation();
+        setActiveId(draft.id);
+        return [draft];
       }
       if (id === activeId) {
-        setActiveId(filtered[0].id);
+        setActiveId(started[0].id);
       }
-      return filtered;
+      const draft = filtered.find((c) => !isStartedConversation(c));
+      return draft ? [draft, ...started] : withSingleDraft(started);
     });
   };
 
@@ -525,7 +551,7 @@ export default function App() {
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
       <Sidebar
-        conversations={conversations}
+        conversations={sidebarConversations}
         activeId={activeId}
         isOpen={sidebarOpen}
         onSelect={handleSelectChat}
@@ -538,9 +564,9 @@ export default function App() {
         user={user}
         onSignOut={() => {
           signOut();
-          const newChat = { id: createId(), title: 'New conversation', messages: [], loaded: true };
-          setConversations([newChat]);
-          setActiveId(newChat.id);
+          const draft = createDraftConversation();
+          setConversations([draft]);
+          setActiveId(draft.id);
           setTempChat(null);
         }}
         onShowAuth={(mode) => { setAuthModalMode(mode); setShowAuthModal(true); }}

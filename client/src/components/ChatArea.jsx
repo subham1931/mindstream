@@ -76,7 +76,7 @@ export default function ChatArea({ conversation, isLoading, onSend, onStop, onTo
   }, [messages, isLoading, scrollToBottom]);
 
   return (
-    <main className="chat-area">
+    <main className={`chat-area ${isEmpty ? 'chat-area--empty' : ''}`}>
       {!isTempChat && (
         <div className="chat-top-bar">
           <button
@@ -132,50 +132,62 @@ export default function ChatArea({ conversation, isLoading, onSend, onStop, onTo
         </div>
       </header>
 
-      <div className="chat-scroll-container">
-        <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll}>
-          {isEmpty ? (
-            <div className="welcome welcome--minimal" />
-          ) : (
-            <div className="messages">
-              <div className="messages-inner">
-                {messages.map((msg, i) => (
-                  <Message
-                    key={i}
-                    message={msg}
-                    isStreaming={isLoading && i === messages.length - 1 && msg.role === 'assistant'}
-                  />
-                ))}
+      {isEmpty ? (
+        <div className="chat-empty-stage">
+          <ChatInput
+            onSend={handleSend}
+            onStop={onStop}
+            isLoading={isLoading}
+            showGreeting
+            models={models}
+            selectedModel={selectedModel}
+            onModelChange={onModelChange}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="chat-scroll-container">
+            <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll}>
+              <div className="messages">
+                <div className="messages-inner">
+                  {messages.map((msg, i) => (
+                    <Message
+                      key={i}
+                      message={msg}
+                      isStreaming={isLoading && i === messages.length - 1 && msg.role === 'assistant'}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {showScrollBtn && (
-          <button
-            className="scroll-to-bottom"
-            onClick={handleScrollToBottom}
-            aria-label="Scroll to latest message"
-            title="Scroll to bottom"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        )}
-      </div>
+            {showScrollBtn && (
+              <button
+                className="scroll-to-bottom"
+                onClick={handleScrollToBottom}
+                aria-label="Scroll to latest message"
+                title="Scroll to bottom"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
+          </div>
 
-      <div className="chat-input-slot">
-        <ChatInput
-          onSend={handleSend}
-          onStop={onStop}
-          isLoading={isLoading}
-          showGreeting={isEmpty}
-          models={models}
-          selectedModel={selectedModel}
-          onModelChange={onModelChange}
-        />
-      </div>
+          <div className="chat-input-slot">
+            <ChatInput
+              onSend={handleSend}
+              onStop={onStop}
+              isLoading={isLoading}
+              showGreeting={false}
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+            />
+          </div>
+        </>
+      )}
     </main>
   );
 }

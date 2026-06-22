@@ -124,8 +124,20 @@
   flex-shrink: 0;
 }
 
-.welcome--minimal {
-  height: 100%;
+.chat-empty-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.chat-empty-stage .chat-input-wrapper {
+  padding: 0;
+  margin: 0;
 }
 
 .messages {
@@ -148,6 +160,10 @@
 }
 
 @media (max-width: 900px) {
+  .chat-empty-stage {
+    padding: 16px 12px 24px;
+  }
+
   .chat-top-bar {
     display: none;
   }
