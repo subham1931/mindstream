@@ -58,6 +58,9 @@ export default function App() {
 
   const abortControllerRef = useRef(null);
   const stopRequestedRef = useRef(false);
+  const conversationsLoadedForUserRef = useRef(null);
+
+  const userId = user?.id ?? null;
 
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const sidebarConversations = conversations.filter(isStartedConversation);
@@ -88,13 +91,20 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Load conversations from Supabase when user logs in
+  // Load conversations once per sign-in (not on tab focus / token refresh)
   useEffect(() => {
-    if (!user || !supabase) return;
+    if (!userId || !supabase) {
+      conversationsLoadedForUserRef.current = null;
+      return;
+    }
 
-    // Reset guest count when user signs in
+    if (conversationsLoadedForUserRef.current === userId) return;
+    conversationsLoadedForUserRef.current = userId;
+
     setGuestMessageCount(0);
     setShowAuthModal(false);
+
+    const draft = createDraftConversation();
 
     authFetch(apiUrl('/api/conversations'))
       .then((res) => res.json())
@@ -108,17 +118,19 @@ export default function App() {
             dbId: c.id,
             loaded: false,
           }));
-          const draft = createDraftConversation();
           setConversations(withSingleDraft(loaded, draft));
-          setActiveId(draft.id);
+        } else {
+          setConversations([draft]);
         }
+        setActiveId(draft.id);
+        setTempChat(null);
       })
       .catch(() => {});
-  }, [user, authFetch]);
+  }, [userId, authFetch]);
 
   // Load messages when switching to a conversation that hasn't been loaded
   useEffect(() => {
-    if (!user || !supabase || !activeId || tempChat) return;
+    if (!userId || !supabase || !activeId || tempChat) return;
 
     const conv = conversations.find((c) => c.id === activeId);
     if (!conv || conv.loaded || !conv.dbId) return;
@@ -137,7 +149,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [activeId, user, conversations, tempChat, authFetch]);
+  }, [activeId, userId, conversations, tempChat, authFetch]);
 
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? 'hidden' : '';
