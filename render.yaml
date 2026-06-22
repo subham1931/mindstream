@@ -17,6 +17,8 @@ services:
         sync: false
       - key: NVIDIA_KEY_GEMMA
         sync: false
+      - key: NVIDIA_KEY_NEMOTRON
+        sync: false
       - key: NVIDIA_API_KEYS
         sync: false
       - key: SUPABASE_URL

@@ -60,6 +60,18 @@ export const MODEL_PROFILES = [
     timeoutMs: 90000,
   },
   {
+    id: 'nvidia/nemotron-3-ultra-550b-a55b',
+    label: 'Nemotron 3 Ultra 550B',
+    keyEnv: 'NVIDIA_KEY_NEMOTRON',
+    temperature: 1,
+    top_p: 0.95,
+    max_tokens: 16384,
+    chat_template_kwargs: { enable_thinking: true },
+    extraBody: { reasoning_budget: 16384 },
+    hasReasoning: true,
+    timeoutMs: 120000,
+  },
+  {
     id: 'deepseek-ai/deepseek-v4-flash',
     label: 'DeepSeek V4 Flash',
     keyEnv: 'NVIDIA_KEY_DEEPSEEK',
@@ -94,6 +106,7 @@ export function loadModelRoutes() {
   const kimiKey = process.env.NVIDIA_KEY_KIMI?.trim();
   const qwenKey = process.env.NVIDIA_KEY_QWEN?.trim();
   const gemmaKey = process.env.NVIDIA_KEY_GEMMA?.trim();
+  const nemotronKey = process.env.NVIDIA_KEY_NEMOTRON?.trim();
 
   return MODEL_PROFILES.map((profile, index) => {
     let apiKey = process.env[profile.keyEnv]?.trim();
@@ -105,6 +118,8 @@ export function loadModelRoutes() {
         apiKey = qwenKey || genericKeys[0];
       } else if (profile.id.includes('gemma')) {
         apiKey = gemmaKey || genericKeys[0];
+      } else if (profile.id.includes('nemotron')) {
+        apiKey = nemotronKey || genericKeys[0];
       } else if (profile.id.includes('flash')) {
         apiKey = flashKey || genericKeys[0];
       } else if (profile.id.includes('pro')) {
@@ -134,6 +149,10 @@ export function buildRequestBody(profile, messages, stream, maxTokens) {
 
   if (profile.chat_template_kwargs) {
     body.chat_template_kwargs = profile.chat_template_kwargs;
+  }
+
+  if (profile.extraBody) {
+    Object.assign(body, profile.extraBody);
   }
 
   return body;
