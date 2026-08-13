@@ -50,7 +50,6 @@ export default function App() {
   const [activeId, setActiveId] = useState(conversations[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [models, setModels] = useState(DEFAULT_MODELS);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id);
   const [tempChat, setTempChat] = useState(null);
   const [guestMessageCount, setGuestMessageCount] = useState(0);
@@ -66,7 +65,7 @@ export default function App() {
   const activeConversation = tempChat || conversations.find((c) => c.id === activeId);
   const sidebarConversations = conversations.filter(isStartedConversation);
   const selectedModelLabel =
-    models.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
+    DEFAULT_MODELS.find((m) => m.id === selectedModel)?.label || 'Llama 3.3 70B Instruct';
 
   // Helper to make authenticated API calls
   const authFetch = useCallback(async (url, options = {}) => {
@@ -75,22 +74,6 @@ export default function App() {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     return fetch(url, { ...options, headers });
   }, [getAccessToken]);
-
-  // Load models
-  useEffect(() => {
-    fetch(apiUrl('/api/models'))
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.models?.length) {
-          const available = data.models.filter((m) => m.available);
-          if (available.length) {
-            setModels(available);
-            setSelectedModel(data.defaultModel || available[0].id);
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Load conversations once per sign-in (not on tab focus / token refresh)
   useEffect(() => {
@@ -592,7 +575,7 @@ export default function App() {
         onToggleSidebar={() => setSidebarOpen(true)}
         onNewChat={handleNewChat}
         onTempChat={handleTempChat}
-        models={models}
+        models={DEFAULT_MODELS}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
         isTempChat={Boolean(tempChat)}

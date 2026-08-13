@@ -48,7 +48,8 @@ Update Render `CLIENT_URL` to match your final Vercel URL, then redeploy the bac
 
 ```
 mindstream-chat/
-├── client/     React + Vite UI
-├── server/     Express API proxy
-└── render.yaml Render blueprint
+├── client/              React + Vite web app
+├── server/              Express API proxy
+├── mindstream-mobile/   React Native (Expo) mobile app
+└── render.yaml          Render blueprint
 ```

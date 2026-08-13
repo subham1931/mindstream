@@ -204,25 +204,30 @@ function getSttConfig() {
   };
 }
 
-app.get('/api/health', (_req, res) => {
+const handleHealthCheck = (req, res) => {
+  const isSupabaseConfigured = Boolean(
+    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
   res.json({
     status: 'ok',
-    models: modelRoutes.map((r) => ({ id: r.id, label: r.label })),
-    defaultModel: modelRoutes[0]?.id,
-    transcriptionAvailable: Boolean(getSttConfig()),
-  });
-});
-
-app.get('/api/models', (_req, res) => {
-  res.json({
-    models: MODEL_PROFILES.map((p) => ({
-      id: p.id,
-      label: p.label,
-      available: modelRoutes.some((r) => r.id === p.id),
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    environment: process.env.NODE_ENV || 'development',
+    models: modelRoutes.map((r) => ({
+      id: r.id,
+      label: r.label,
+      available: isKeyAvailable(r.apiKey),
     })),
-    defaultModel: modelRoutes[0]?.id || MODEL_PROFILES[0]?.id,
+    defaultModel: modelRoutes[0]?.id || null,
+    transcriptionAvailable: Boolean(getSttConfig()),
+    supabaseConfigured: isSupabaseConfigured,
   });
-});
+};
+
+app.get('/health', handleHealthCheck);
+app.get('/api/health', handleHealthCheck);
+
 
 app.post('/api/chat', async (req, res) => {
   const { messages, stream = true, model: requestedModel } = req.body;
